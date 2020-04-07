@@ -1,5 +1,5 @@
 # headache-weather-study
-Study on the association between migraine headache and the weather
+Study on the association between migraine headache and the weather.
 
 To view the results, download the file headache.html from this repository and open it in a web browser.
 
