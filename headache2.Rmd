@@ -1,0 +1,449 @@
+---
+title: ""
+author: "Michael J Kleinsasser"
+date: "10/21/2019"
+output:
+  html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(purrr)
+library(kableExtra)
+```
+
+### Title
+
+Personalized migraine prediction using variability in weather conditions: an observational diary-based analysis
+
+### Authors
+
+Michael J Kleinsasser, MS
+
+University of Wyoming, Laramie, USA
+
+Timothy J Robinson, PhD
+
+University of Wyoming, Laramie, USA
+
+### Key Words
+
+Bayesian data analysis, migraine, weather, weather variability
+
+### Abbreviations
+
+CI = credible interval
+
+### Structured abstract
+
+### Objective
+
+The objective of this diary-based analysis was to develop a personalized approach to migraine risk modeling which explains weather variability as a migraine trigger in chronic and episodic migraineurs.
+
+### Background
+
+Weather has been hypothesized to alter the risk of migraine, but supportive evidence is limited and little is known about the influence of weather on individual level differences from the average migraineur. This study presents a personalized approach to migraine risk modeling and applies it to model the relationship of variability in weather and risk.
+
+### Methods
+
+We used a Bayesian hierarchical model to incorporate individual and population averaged effects for the risk factors of migraine using electronic headache diaries. Posterior distributions of model parameters were used to predict risk of migraine events for the participants, and easy to interpret visualizations of predictions were created to study the practical impacts on individuals.
+
+### Results
+
+```{r, echo=FALSE}
+post.summary = function(x) {
+  c(mean = mean(x), sd = sd(x), quantile(x, probs = c(0.025, 0.25, 0.5, 0.75, 0.975)))
+}
+RMSE_list = readRDS("./final results and code/generated_tables_plots/RMSE.Rds")
+sepis = post.summary((RMSE_list$epis_null - sample(RMSE_list$epis_full, 
+                                                  size = length(RMSE_list$epis_null), 
+                                                  replace = FALSE))*100) %>% as.list()
+schron = post.summary((RMSE_list$chron_null - RMSE_list$chron_full)*100) %>% as.list()
+```
+
+Personalized weather models improved prediction accuracy by `r round(sepis$mean, 2)`% (95% CI = `r round(sepis$'2.5%', 2)`, `r round(sepis$'97.5%', 2)`) for episodic and `r round(schron$mean, 2)`% (95% CI = `r round(schron$'2.5%', 2)`, `r round(schron$'97.5%', 2)`) for chronic migraineurs, meaning that according to our model, an additional ~`r 5`% of migraine events can be correctly predicted by weather variability. Variability in weather has a Goldilocks effect on risk where the extremes of variability increase risk and moderate amounts do not alter risk. Individuals who experience periods of no change and periods of extreme change in weather are at the highest risk. Given typical weather conditions for each individual, we predict risk in excess of `r 30`% and `r 60`% for the most affected episodic and chronic migraineurs, respectively. Visualization of predictions show highly individualized effects of weather on migraine.
+
+### Conclusions
+
+This observational diary-based study exposes the non-linear relationship between weather variability and risk of migraine, and the importance of individual impacts of variability on risk. Our personalized migraine risk model shows promise in explaining important factors which contribute to migraine, and it can help individuals with migraine predict their risk and specific events given local changes in weather conditions.
+
+### Text 
+
+### Introduction
+
+Multiple studies have found associations between changes in weather and migraine occurrence [1, 2, 3, 4, 5, 6]. In a factor analysis, one of the most important factors contributing to onset of migraine was change in weather, which incorporated change in barometric pressure, temperature, and humidity prior to onset of migraine attack [2]. In another study, changes in barometric pressure up to two days before and after a migraine were associated with altered frequency of occurrence if the pressure change exceeded 5 hPa [3]. A Canadian study investigating the impacts of Chinook winds on headache found that some individuals were affected by high-wind Chinook days, which, by definition, involved changes in temperature [4]. Zebenholzer et al. [5] failed to show that day to day change in temperature altered the risk of migraine and concluded that the association between weather and migraine is questionable. In a more personalized study, select patients experienced elevated risk of migraine occurrence due to differences in daily pressure, temperature, and humidity [6].
+
+Although a number of studies have investigated the impact of weather on migraine [7, 8, 9, 10, 11, 12, 13], no study found in our literature search modeled weather variability over the time between attacks as a predictor of migraine, where variability is some measure of the spread in values of a weather factor over an interval of time. Some studies have used the day to day change in weather or related measures of change, but the scope of those measures of weather variability is limited to differences between days rather than capturing the variability over all measurements between attacks. We see this as a limitation, because sample variance (the measure of variability used in our study) is a conveniently calculated measure for variation which incorporates all measurements between attacks.
+
+In this observational diary-based study, we investigate the relationship between variability in humidity, pressure, temperature, wind gust and wind speed and the risk of migraine while accounting for baseline risk over time; and factors relating to disease characteristics, such as classification of an individual as chronic or episodic according to ICHD3 criteria. The correlation between repeated migraine events from the same subject is accounted for by random effects using a Bayesian mixed effects model. The mixed effects model enables us to also get quantitative estimates of the impact of weather factors on individuals. More specifically, we investigate the impact of variability in weather factors on migraine occurrence. Lastly, we obtain predictions of migraine events using the joint posterior distribution and assess model fit by comparing average prediction error of future events.
+
+### Methods
+
+### Data
+
+Individuals with migraine registered to use N1-Headache® (previously called Curelator Headache®) directly or through a physician ‘coupon referral’ program, via the Curelator website or via the App store.  At the time of the study, Curelator Headache® was only available to users of iOS in the English version.  During registration they answered questions about basic demographics and their migraine history and gave consent for their de-identified data to be used for research purposes. They then downloaded the Curelator Headache App and used it daily for at least 90 days, entering details about all headaches and associated symptoms when they occurred.
+
+Seventeen weather factors for the location of each individual were automatically collected from the Aeris Weather API and added to their daily data. Weather data included temperature (ºC), pressure (HPa), humidity (%), wind gust (km per hour), and wind speed (km per hour) with daily min, max, range and mean values. We further summarized the weather variables between migraine attacks by computing the mean and standard deviation over the duration of time intervals to satisfy the data structure required for modeling. For illustration, if a patient had a 3-day gap between two migraines with temperatures of 23, 30, 25 ºC, then mean (standard deviation) in temperature over the interval is 26 ºC (3.61 ºC). Mean value over time intervals was meant to assess the average state of the meteorological factor, and standard deviation was meant to assess the variability in the state of the factor.
+
+Exposure variables (also referred to as factors) of primary concern in the analysis were mean and standard deviation in humidity, pressure, temperature, wind gust, and wind speed. The square of each was included to explore quadratic trends. Each of the mean and standard deviation variables was centered to reduce multicollinearity. This centered data set was then QR-decomposed to further remove collinearity among predictors, and to de-correlate the posterior distribution for better estimates of model parameters. 
+
+Each recorded headache was classified as migraine or ‘non-migraine’ using an algorithm based on the ICHD-3 criteria [14]. Based on 90 days of tracked data, individuals were classified as having either episodic migraine or chronic migraine using the following classification algorithm based on ICHD-3 criteria: The number of migraines and headaches were counted for three consecutive 30 day calendar periods. If the number of headache days was greater than or equal to 15 for the three consecutive months and the number of migraine days was greater than or equal to eight, then the individual was classified by the algorithm as chronic. They were otherwise classified as episodic.
+
+### Bayesian hierarchical migraine risk model
+
+We wish to make inference from the joint posterior distribution of the parameters associated with the baseline hazard function over time and standard deviation in weather factors. Also, since weather variation is hypothesized to have an impact at the individual and population levels, a multilevel prior distribution was constructed. All posterior samples were draws using the software STAN via its R version 3.6.1 interface, rstan (package version 2.19.2) [15].
+
+Before we describe the model, some notational notes are needed. The total number of observations $N$ contain all repeated observations for the $J$ patients. Let $K$ denote the number of predictor columns. The design matrix $x$ has dimension $N*K$ and contains the weather measurements for each observation, and was centered and orthogonalized using a Q-R decomposition. Each row $x_i$ comprises of the standard deviation and square standard deviation in five weather variables - resulting in ten measurements per observation. The random effect design matrix $z$ contains only those columns of the data for which we modeled individual level effects, so its dimension is $N*K_z$, where $K_z$ is the number of random effect variables. In our analysis, we only found it necessary to model the square standard deviation columns as random effects. 
+
+To account for the within and between individual effects, we employed a hierarchical approach where the joint prior parameters are assigned priors themselves - called hyper-priors. Specifically, we placed a prior variance-covariance matrix ($\Sigma$) on the distribution of individual weather effects. The relationship between the joint posterior distribution for a given observation $i$ at each interval $g$ for every $j$th patient and the likelihood, population averaged prior distributions and hyper-prior distributions is expressed as,
+
+\[
+\begin{align}
+P(\lambda_{g{[i]}}, \underline{\beta}, \underline{\upsilon}_{j{[i]}}, \Sigma \vert c_i, x_i, z_i) \propto P(c_i\vert p_i)P(p_i \vert \lambda_{g{[i]}}, \underline{\beta}, \underline{\upsilon}_{j{[i]}}, x_i, z_i)P(\lambda_{g{[i]}})P(\underline{\beta})P(\underline{\upsilon}_{j{[i]}} \vert \Sigma)P(\Sigma)\text{,}
+\end{align}
+\]
+
+where the bracket notations $g[i]$ and $j[i]$ denote the $g$th interval and $j$th patient corresponding to the $i$th observation.  $c_i$ indicates whether a migraine event occurred for the $i$th observation. $p_i$ is the latent probability of migraine attack for the $i$th observation. The parameter $\lambda_g$ is the baseline hazard for the $g$th interval of observation. The vector of parameters $\underline{\beta}$ represents the set of population level regression parameters; the $j$th vector $\underline{\upsilon}_{j}$ is the vector of individual level regression coefficients for the five standard deviation in weather predictors, i.e., $\underline{\upsilon}_{j}^T = ({\upsilon}_1,..., {\upsilon}_{K_z})_j$; and, $\Sigma$ is the unstructured variance-covariance matrix for uncertainty in the random effects. Since $\Sigma$ is difficult to model directly, we instead decomposed it into an upper triangular matrix $L$ and the vector of random effect standard deviations, $\underline{\tau}$. The equation relating these components is $\Sigma = \text{diag}(\underline{\tau})LL'\text{diag}(\underline{\tau})$.
+The formulation for the model with three levels of variation (likelihood, population averaged distribution, and hyper-prior distribution) is,
+
+Likelihood:
+
+\[
+\begin{align}
+c_{i} \vert p_i  &\overset{\text{ind.}}{\sim} \text{Bernoulli}(p_i) \\
+\end{align}
+\]
+
+
+Link equation:
+
+\[
+\begin{align}
+p_i \vert \lambda_{g{[i]}}, \underline{\beta}, \underline{\upsilon}_{j{[i]}}, x_i, z_i &= \text{CLogLog}^{-1}(\lambda_{g{[i]}} + x_i\underline{\beta} + z_i\underline{\upsilon}_{j{[i]}}) \\
+\end{align}
+\]
+
+The cloglog link is defined as $\text{log}(-\text{log}(1-p_i))$. In the link equation, $x_i$ is the $i$th row vector of the fixed effects design matrix, which is of dimension $1*K$, and the $i$th row $z_i$ is denoted the same way.
+
+Level 1 Prior distribution:
+
+\[
+\begin{align}
+\lambda_g &\overset{\text{ind.}}{\sim} \text{Normal}(0,5^2) \\
+\beta_k &\overset{\text{ind.}}{\sim} \text{Normal}(0,5^2) \\
+\underline{\upsilon}_{j} \vert \underline{\tau}, L &\overset{\text{ind.}}{\sim} \text{MVN_Cholesky}(\underline{0}, \text{diag}(\underline{\tau})L) \\
+\end{align}
+\]
+
+MVN_Cholesky is the multivariate normal distribution reparameterized to take a Cholesky decomposition in place of the full variance-covariance matrix. This was utilized because it is easier to model the essential component of the Cholesky decomposition than the matrix itself. 
+
+Level 2 Prior distribution:
+
+\[
+\begin{align}
+L &\sim \text{LKJ_corr_Cholesky}(2) \\
+\tau_m &\overset{\text{ind.}}{\sim} \text{Normal}(0,5^2)I(x\geq0) \\
+\end{align}
+\]
+
+Here, LKJ_corr_Cholesky is the LKJ distribution expressed in terms of its Cholesky factor. 
+
+Generated quantities:
+
+\[
+\Sigma = \text{diag}(\underline{\tau})LL'\text{diag}(\underline{\tau})
+\]
+
+Prior distributions were chosen to be vague (high variance) because we had no prior knowledge to inform the inference. 
+
+In practice, it was found that individual level effects of humidity, temperature, and wind speed were not significant enough to have an impact on chronic migraineurs, so only pressure and wind gust individual level effects were modeled. All individual level weather effects were modeled successfully in the episodic group.
+
+This generalized linear model with complementary log-log link was shown to be equivalent to a complementary log-log model for interval censored survival times [16]. This model equivalence implies that our coefficient estimates should be the same as in the equivalent survival context. Secondly, our data was interval censored like the survival form of the model: the resolution of event times was only one day, so the model was blind to when events happened within the intervals. This model equivalence allowed us to switch contexts to a generalized linear framework, which then allowed us to extend the model hierarchically. In turn, we could model individual level effects, where individuals share information between each other.
+
+### Illustration of the model
+
+Here we present a simplified illustration to express the meaning of each parameter of interest given some hypothetical sample data. Let's say individual X had two migraine events over a time period of 5 days. Table 1 contains an abbreviated table of hypothetical data for that individual.
+
+Our goal is to use this table of data combined with the Bayesian technique for statistical inference to estimate the effects of each weather factor. Here is an example of what each of the estimates represents. Our focus is on explaining the baseline risk parameters, population averaged regression coefficients, and individual level coefficients since these are of primary interest.
+
+In this data example, there are two baseline risk parameters, $\lambda_{1}$ and $\lambda_{2}$. There is one for each value of the time interval variable (which took the values 1 and 2 in the sample data set). The parameter $\lambda_{1}$ is interpreted as the true baseline risk of experiencing a migraine on time interval 1. There are four population averaged regression parameters: $\beta_{\text{temperature}}$, $\beta_{\text{temperature}^2}$, $\beta_{\text{humidity}}$, $\beta_{\text{humidity}^2}$, and a set of individual level deviations from the regression parameters, which, in our case are $\upsilon_{\text{temperature}^2}$ and $\upsilon_{\text{humidity}^2}$. The regression parameters $\beta_{\text{temperature}}$ and $\beta_{\text{temperature}^2}$ are the true linear and quadratic changes in risk of migraine due to a one unit increase in temperature. The individual level regression parameter $\upsilon_{\text{temperature}^2}$ is the true deviation (for individual X) in the quadratic effect due to a one unit increase in temperature.
+
+When fitting the model in practice, we chose to include linear and quadratic effects of each centered and orthogonalized weather factor, and only the square terms were allowed to vary between individuals. In our experience, varying both the linear and quadratic effects did not lead to an improved model fit.
+
+### Model assessment and model selection
+
+Using the distribution of each parameter, probability of attack was computed at each observation. These probability values were used to draw a random value 1 (predicting a migraine will occur) or 0 (predicting a migraine will not occur). We then computed the error rate of prediction over the distribution of the parameters, where the error rate of draw $j$ is defined as $\overline{err}_{j} = \sum_{i=1}^N(\tilde{c}_i^j - c_{i})^2/N$, also known as the mean square error of prediction, where $\tilde{c}_i$ is 1 if an event is predicted to occur, 0 if it is not, $c_{i}$ denotes whether an event actually occurred (observed), and $N$ is the number of observations. This resulted in a distribution on the mean square prediction error.
+
+Models with lower mean square prediction error rate were considered better (less incorrect predictions). Three models were compared for the two populations: the full model, which includes baseline risk, population averaged effects, and individual level (random) effects; the fixed effects only (or FE), which includes baseline risk and population averaged effects; and the null model, which includes baseline risks only.
+
+### Visualization and predicted quantities
+
+A set of easy to interpret visualizations were conceived to illustrate this complicated model in practical terms using ggplot2 version 3.2.1. To generate curves of predicted probability of migraine over time, we applied the mean weather experienced (in terms of the five factors humidity, pressure, temperature, wind gust, and wind speed) to the posterior distribution of each parameter, calculated the inverse cloglog to obtain a distribution of probability of migraine event at each point in time, and plotted probability versus time. Since we had a large number of participants in the study, those with consistently low probability were summarized as grey smooth trends and high risk individuals were colored and labeled for further analysis.
+
+We estimated the change in probability due to the contribution of each weather factor given that all other factors are influencing the individual. This was done by subtracting the predicted probability of attack given all weather factors from the predicted probability given only the factors not of interest. For a single participant, credible intervals were calculated at the 95% level using the predicted change due to each weather factor to discern if the change due to each could be distinguished from zero. If the 95% credible intervals did not overlap zero, then the change in probability of attack was interpreted to affect risk.
+
+We estimated the probability that a participant is expected to exceed the population averaged effect for each of the weather factors for which individual level (random) effects were modeled. This gave an assessment of whether the participant is likely to be more affected by that factor than the average participant. 
+
+### Results and discussion
+
+Daily event and weather data were acquired for 6,677 individuals suffering from headache using the headache diary application. Participants were excluded if they were minors or they did not document migraines for at least 90 days during a continual 120-day period. The 90 day tracking minimum was used to enforce reliable documentation of headache events from each participant. Of the 6,677 total participants, 684 were minors, and 560 met the 90-day tracking inclusion criterion. Of these, 465 were classified as episodic and 95 as chronic based on the ICHD-3 chronic classification algorithm.
+
+Individuals were further eliminated if weather variables were not complete for at least 90% of tracked days, resulting in a sample size of 284 participants. For purposes of the statistical fitting procedures, we further had to eliminate individuals who had zero non-migraine days and those with fewer than ten. The final sample size used for analysis included 229 participants (191 episodic, 38 chronic) who documented a total of 17,153 participant-days. Of the 17,153 participant-days included in the analysis, individuals experienced 4,006 migraine headaches. 
+
+The results are structured so that we proceed from population level inference down to the individual impact level, and then expand on a single individual to show the usefulness of these results for the individual. We then justify the ability of the model to predict migraine.
+
+### Population level inference
+
+To justify treating chronic and episodic migraineurs as separate populations in the analysis, we had to determine whether the baseline risk functions for the two groups differed. The two risk curves were considered different at a given point in time if the 95% credible intervals did not overlap. Figure 1 facilitates comparison between these two populations of interest both in terms of risk curves and effects due to weather. For precise numeric estimates of these values and 95% credible intervals, see Appendix Tables 8, 9, 10, and 11.
+
+The baseline risk for chronic migraineurs is significantly higher than for episodic migraineurs for days one through six between attacks and at day nine (Figure 1 A). These risk curves are clearly not proportional because the change in risk from day five to six is much greater for chronic than for episodic individuals. We used these results to justify treating chronic and episodic migraineurs as separate populations. 
+
+Further evidence for differences between the two populations were provided by 95% posterior credible intervals for risk estimates of weather factors. The effect sizes of each weather factor were assessed for their significance and for differences between populations. The 95% credible intervals on effect sizes for the weather factors all overlap between the populations except for temperature. We can see that there is a much larger overall temperature effect for episodic migraineurs. Episodic individuals experience a positive effect of temperature at the extremes of variability (Figure 1 B), but chronic individuals do not experience a significant effect at the extremes. Since 95% posterior credible intervals overlapped for all other weather effects, we cannot say the two populations differ with regard to those factors.
+
+Interestingly, every weather factor studied had an impact regardless of chronic or episodic status except for the quadratic trend in risk due to temperature in the chronic group. We concluded that the quadratic trend in risk due to temperature for the chronic group did not affect risk because its 95% credible interval overlaps zero. The quadratic terms of the model were of primary interest because we detected increased risk at low and high variability, but linear trends in variability were not associated with change in risk.
+
+Our estimates of effect sizes corresponding to quadratic trends in risk due to weather variability highlight the importance of the effect of weather on migraine. We will see later how individuals are impacted differently by each factor; that the practical impact changes on a day to day basis; and that weather factors can both increase and decrease risk.
+
+### Individual level inference
+
+Now that we have shown the relevance of the effects of weather variability at the population level, we want to determine the effect on each individual given their typical daily weather experience. To do this, we applied our model fit to the average weather for each person over time to get their average predicted chance of attack due to weather variability. The type of person that is expected to have elevated risk is one who has above average effects due to one or more weather factors and who experiences the extremes of variability in the weather (i.e., periods of no change and periods of extreme change).
+
+Probability, or risk, of attack over time given average weather for episodic migraineurs was predicted to be as high as ~40% for the most at-risk individuals, with nine people (each color coded in Figure 2 A) having risk in excess of 35% for at least one time point within ten days of the previous migraine. For the chronic group, risk given typical weather conditions was in excess of ~60% for the highest risk individuals, and thirteen people exceeded 58% at one or more time points (Figure 2 B).
+
+Risk of attack over gap time between migraines given typical weather appears to be heavily influenced by the state of the weather and individual level effect sizes. This is evidenced by the highlighted patients in both portions of Figure 2 that have dissimilar shaped curves of predicted risk. In the episodic group, some are at high risk early in time and later have low risk  (e.g., individual IDs 137, 164; Figure 2 A), while some start at low risk and become high risk at later times (e.g., individual IDs 89, 123; Figure 2 A). As gap time between migraine events becomes large (i.e., in excess of 12 days) the baseline risk of attack overwhelms any prediction due to weather factors, so we limited Figure 2 to 10 day gap times.
+
+Since the daily experience of individuals is the focus of our model of migraine risk, let us interpret one person from the chronic group and one from the episodic group. Each highlighted individual was selected because of elevated risk due to weather. We chose to inspect individual 142 from the episodic group (Figure 2 A, yellow line). Individual 142 is among the five highest risk people at one day between attacks with a chance of migraine event exceeding 35%. Risk falls rapidly to around 25% by two days, ranges between 22-28% for the following 5 days, and then drops below 15% by day eight. 
+
+We chose individual 21 from the chronic group for a similar interpretation. In contrast to the episodic individual we last interpreted, individual 21 experienced peak risk at day 6 (~73%) and lowest risk one day later (~39%). This individual will be further assessed later when we do a complete breakdown of the change in probability of attack associated with change in each weather factor. 
+
+### Breakdown of individual level effects
+
+We've seen how individuals are impacted by overall weather variability, and that their experiences may differ greatly. But what is the contribution of each weather factor to changes in risk for the individual, and how does the influence of each factor differ across their everyday experiences? It is the purpose of this section to answer those questions by visualizing changes in probability due to the addition of each weather factor. See Figure 3 for a set of chronic migraineurs, and Figure 4 for episodic migraineurs. 
+
+It is difficult to set a single cutoff for change in risk that makes a given change practically meaningful. But generally, if the change in risk due to a single factor is consistently less than 5% (0.05), the practical impact on the individual will be small. But changes on the order of 50% (0.5) can make an event highly likely, so anything above that is a walloping contribution for a single factor. There are cases when change in risk approaches or exceeds 0.5. For examples, see Figure 3 A, D.
+
+For some individuals, one weather factor consistently contributed most to change in risk, and for others, the largest contributing factors changed over time. See Figure 3 A, D, F, and Figure 4 C, G for examples where one weather factor consistently contributed to change in risk. A non-exhaustive set of examples where a combination of weather factors contributed substantially to change in risk include Figure 3 B, E (days 1 and 2), H (days 6-9), and Figure 4 A, E, and H. 
+
+In Tables 2 and 3, we show the probability that an example set of patients will experience increased risk of attack due to each factor for which individual level effects were modeled. For the patients with high probability of increased risk, the extremes of weather variability were more likely to increase their risk of migraine. For example, chronic migraineur 37 has a high probability (0.817) of increased risk at low and high variability in pressure, and the same appears to be true for wind gust (0.790). In contrast, chronic migraineur 7 has a low probability of being more at risk than the population average in pressure (0.024) and wind gust (0.079). The full set of estimates are available in Appendix Tables 6 (chronic group) and 7 (episodic group). These probability estimates can be used as a quick assessment to determine high risk individuals across weather factors. 
+
+### Complete breakdown for one individual
+
+In light of the uncertainty in the contribution of each weather factor on the individual, which factors have a practical impact on risk of migraine, and which can we declare different from the effect of the others at the 0.05 significance level? It is the purpose of the complete breakdown in Figure 5 to answer these questions. 
+
+For individual 21 (Figure 5), variability in humidity has the largest impact on risk (Figure 5 A), with an estimated change in risk over 30% at peak time. Interestingly, pressure variability (Figure 5 B) beyond day 1 and variability in wind speed (Figure 5 E) tended to decrease risk of migraine. Pressure was predicted to decrease risk by as much as 6% on days 5-8, and wind speed was predicted to decrease risk by ~10% after two days. Overall, we predict individual 21 to be both positively and negatively impacted by the variability in weather, depending on local weather conditions. However, given their typical experience, it was variability in humidity which overwhelmed the influence of the other factors to produce high overall risk of migraine (Figure 5 F).
+
+### Prediction accuracy
+
+```{r, echo=FALSE}
+post.summary = function(x) {
+  c(mean = mean(x), sd = sd(x), quantile(x, probs = c(0.025, 0.25, 0.5, 0.75, 0.975)))
+}
+RMSE_list = readRDS("./final results and code/generated_tables_plots/RMSE.Rds")
+sepis = post.summary((RMSE_list$epis_null - sample(RMSE_list$epis_full, 
+                                                  size = length(RMSE_list$epis_null), 
+                                                  replace = FALSE))*100) %>% as.list()
+schron = post.summary((RMSE_list$chron_null - RMSE_list$chron_full)*100) %>% as.list()
+```
+
+Posterior predictive error rate of competing models showed that models accounting for population averaged weather variability outperformed baseline-only models (Tables 4 and 5). The fixed effect models (abbreviated FE in the tables) included linear and quadratic standard deviation in weather predictors. Models accounting for individual level effects of weather variability led to a further decrease in posterior predictive error rate. The chronic group included individual level effects for pressure and wind gust, and the episodic group included individual level effects for humidity, pressure, temperature, wind gust, and wind speed. The episodic group achieved a much lower predictive error rate than the chronic group, but both populations experienced similar improvement in prediction due to weather variability (~5% decrease in error rate). Personalized weather models improved prediction accuracy by `r round(sepis$mean, 2)`% (95% CI = `r round(sepis$'2.5%', 2)`, `r round(sepis$'97.5%', 2)`) for episodic and `r round(schron$mean, 2)`% (95% CI = `r round(schron$'2.5%', 2)`, `r round(schron$'97.5%', 2)`) for chronic migraineurs.
+
+### Further discussion
+
+We fit models that included all available demographic factors (including gender, age, country, migraine years, employment status, and whether individual has menstrual cycle) and disease characteristic factors (including peak severity and time outside) and found that none of them had a significant impact on risk, so therefore were excluded from the final models. We also analysed the effect of linear and quadratic effects due to mean weather over intervals as well as interactions between mean and standard deviation in weather factors and found no significant associations with either approach.
+
+Weather data was collected automatically from a weather station near the user at the time the questionnaire was answered. For various reasons, the weather data might not exactly reflect the weather conditions the user experienced during the day. For example, when the closest weather station was far away from the current location or when the user's location changed during the day (i.e., the user worked and lived in different places), the recorded weather measurements may be inaccurate.
+
+Results of this study may include volunteer bias toward individuals who tended to be more severe or did not respond as well to medication compared to the general population of chronic or episodic migraineurs. This may be the case when headache diaries are used as a secondary or tertiary treatment option only after the patient tried medication. The chronic migraineur group may also include individuals with headache caused by medication overuse. Our reasoning is that although headache medication use was recorded, there was no data collected on medication withdrawal to exclude this case.
+
+Throughout our investigation into the relationship between weather variability and migraine, we found quantitative evidence using statistically sound methodology that accounted for within- and between-participant variability and absolute estimates of risk. This objective was confirmed using Bayesian prediction, which accounts for the uncertainty in model predictions.
+
+Because of the use of voluntary study participants and the need to eliminate unreliable participants due to lack of reporting, these results are only generalizable to individuals classified as chronic and episodic migraineurs who signed up for the N1-Headache app and completed all inclusion criteria, such as reliable headache journaling and weather data being available and recorded. Also, the app was only available to users of iOS in the English version. Future studies could alleviate these issues by randomly selecting individuals to study and by incorporating Bayesian missing data inference into the model.
+
+### Conclusions
+
+This observational diary-based study exposes the relationship between weather variability and risk of migraine, and the importance of individual impacts of variability on risk. The complete breakdown of the changes in risk due to weather for a single individual showed that variability in weather can increase or decrease risk depending on the individual's set of effects and local changes in weather conditions. 
+
+### References
+
+1. Hoffmann J, Lo H, Neeb L, Martus P, Reuter U. Weather sensitivity in migraineurs. J Neurol. 2011; 258(4): 596-602.
+
+2. Prince PB, Rapoport AM, Sheftell FD, Tepper SJ, Bigal ME. The effect of weather on headache. Headache. 2004; 44(6): 596-602.
+
+3. Kimoto K, Aiba S, Takashima R, Suzuki K, Takekawa H, Watanabe Y, Tatsumoto M, Hirata K. Influence of barometric pressure in patients with migraine headache. Intern Med. 2011; 50(18): 1923-1928.
+
+4. Cooke LJ, Rose MS, Becker WJ. Chinook winds and migraine headache. Neurology. 2000; 54(2): 302-302.
+
+5. Zebenholzer K, Rudel E, Frantal S, Brannath W, Schmidt K, Wöber-Bingöl Ç, Wöber C. Migraine and weather: a prospective diary-based analysis. Cephalalgia. 2011; 31(4): 391-400.
+
+6. Hoffmann J, Schirra T, Lo H, Neeb L, Reuter U, Martus P. The influence of weather on migraine–are migraine attacks predictable? Ann Clin Translat Neurol. 2015; 2(1): 22-28.
+
+7. Villeneuve PJ, Szyszkowicz M, Stieb D, Bourque DA. Weather and Emergency Room Visits for Migraine Headaches in Ottawa, Canada. Headache. 2006; 46(1): 64-72.
+
+8. Robbins L. Precipitating factors in migraine: a retrospective review of 494 patients. Headache. 1994; 34(4): 214-216.
+
+9. Yang AC, Fuh JL, Huang NE, Shia BC, Peng CK, Wang SJ. Temporal associations between weather and headache: analysis by empirical mode decomposition. PloS one. 2011; 6(1): p.e14612.
+
+10. Lee YJ, Chen YT, Ou SM, Li SY, Yang AC, Tang CH, Wang SJ. Temperature variation and the incidence of cluster headache periods: A nationwide population study. Cephalalgia. 2014; 34(9): 656-663.
+
+11. Becker WJ. Weather and migraine: Can so many patients be wrong? Cephalalgia. 2011; 387-390.  
+
+12. Vodonos A, Novack V, Zlotnik Y, Ifergane G. Ambient air pollution, weather and daily emergency department visits for headache. Cephalalgia. 2015; 35(12): 1085-1091.
+
+13. Diamond S, Freitag FG, Gallagher RM, Nursall A. The effects of weather on migraine frequency. Cephalalgia. 1989; 9(10_suppl): 320-320.
+
+14. Headache Classification Committee of the International Headache Society. The International Classification of Headache Disorders. Cephalalgia. 2018; 38 (3rd edition): 1-211.
+
+15. Carpenter B, Gelman A, Hoffman MD, Lee D, Goodrich B, Betancourt M, Brubaker M, Guo J, Li P, Riddell A. Stan: A probabilistic programming language. J Stat Soft. 2017; 76(1).
+
+16. Prentice RL, Gloeckler LA. Regression analysis of grouped survival data with application to breast cancer data. Biometrics. 1978; pp.57.
+
+### Tables
+
+```{r, echo=FALSE}
+data.frame(
+  event = c(0,0,1,0,1),
+  interval = c(1,1,1,2,2),
+  temperature = c(2.5,  2.7, -3.8, -0.1, 13.1),
+  temperature_squared = c((2.5)^2,  (2.7)^2, (-3.8)^2, (-0.1)^2, (13.1)^2),
+  humidity = c(1.7,  2.4, -2.4,  0.8, -3.1),
+  humidity_squared = c((1.7)^2,  (2.4)^2, (-2.4)^2,  (0.8)^2, (-3.1)^2)
+) %>%
+  kable() %>%
+  kable_styling()
+```
+Table 1. Example data set for hypothetical individual X used to show the structure of data used in the analysis.
+
+```{r, echo=FALSE, warning=FALSE}
+readRDS("./final results and code/generated_tables_plots/chron.p.select.Rds") %>%
+  as_tibble %>%
+  mutate_each_(funs(as.numeric), vars(Pressure, contains("Wind"))) %>%
+  select(Individual, Pressure, contains("Wind")) %>%
+  kable(digits = 3) %>%
+  kable_styling()
+```
+Table 2. Probability that the given individual with chronic migraine is affected by weather variability more than the population average.
+
+```{r, echo=FALSE, warning=FALSE}
+dat = 
+readRDS("./final results and code/generated_tables_plots/epis.p.select.Rds") %>%
+  as_tibble() %>%
+  mutate_each_(funs(as.numeric), vars(Humidity, Pressure, Temperature, contains("Wind"))) %>%
+  select(Individual, Humidity, Pressure, Temperature, contains("Wind"))
+colnames(dat)[5] = c("Wind gust")
+dat %>%
+  kable(digits = 3) %>%
+  kable_styling()
+```
+Table 3. Probability that the given individual with episodic migraine is affected by weather variability more than the population average.
+
+```{r, echo=FALSE}
+post.summary = function(x) {
+  c(mean = mean(x), sd = sd(x), quantile(x, probs = c(0.025, 0.25, 0.5, 0.75, 0.975)))
+}
+
+RMSE_list = readRDS("./final results and code/generated_tables_plots/RMSE.Rds")
+RMSE_chron = RMSE_list[grep("chron", names(RMSE_list))]
+RMSE_epis = RMSE_list[grep("epis", names(RMSE_list))]
+rnames = c("Full", "FE", "Null")
+rmse.chron.data = 
+  do.call(rbind,
+    map(RMSE_chron, post.summary)
+  ) 
+rownames(rmse.chron.data) = rnames
+rmse.chron.data %>%
+    kable(digits = 3) %>%
+    kable_styling()
+```
+Table 4. Mean square prediction error for chronic migraineurs.
+
+```{r, echo=FALSE}
+rmse.epis.data = 
+do.call(rbind,
+    map(RMSE_epis, post.summary)
+  )
+rownames(rmse.epis.data) = rnames 
+rmse.epis.data %>%
+    kable(digits = 3) %>%
+    kable_styling()
+```
+Table 5. Mean square prediction error for episodic migraineurs.
+
+### Figures
+
+```{r, echo=FALSE, fig.cap='Figure 1. (A) Population level risk estimates due to baseline over time, (B) and linear and quadratic effect sizes by weather factors. Probability of attack (A) shows how baseline risk evolves over time and how the two populations compare. Effect by weather factor (B) illustrates how each weather factor compares to zero effect and facilitates comparison of the populations of interest using 95% posterior credible intervals.'}
+knitr::include_graphics("./final results and code/generated_tables_plots/pop_effects_comparison.png",
+                        dpi = 600)
+```
+
+```{r, echo=FALSE, fig.cap='Figure 2. Probability of attack over time given typical weather for the individual. Individual level of overall predicted risk estimates for episodic sample (A) and chronic sample (B) due to baseline and combined effects of every weather factor investigated. Probability of attack shows how baseline risk evolves over time and how each individual compares. Episodic individuals with all predicted event probabilities less than or equal to 0.35 were summarized with gray smooth lines. Chronic individuals for whom predicted probability of attack was less than or equal to 0.58 were also summarized. These cutoffs were chosen to minimize clutter and only show individuals with the highest risks. Note the difference in y-axis scale between A and B.'}
+knitr::include_graphics("./final results and code/generated_tables_plots/probability_plots.png",
+                        dpi = 600)
+```
+
+```{r, echo=FALSE, fig.cap='Figure 3. Change in attack probability by weather factor for chronic migraineurs. Changes in probability are due to the addition of each weather factor given that all other factors are already present in the model. Individuals were chosen based on the distictive impacts due to some weather factors. Note the differences in scale between individual level plots.'}
+knitr::include_graphics("./final results and code/generated_tables_plots/breakdown_probability_plots_chronics.png",
+                        dpi = 600)
+```
+
+```{r, echo=FALSE, fig.cap='Figure 4. Change in attack probability by weather factor for episodic migraineurs. Changes in probability are due to the addition of each weather factor given that all other factors are already present in the model. Individuals were chosen based on the distictive impacts due to some weather factors. Note the differences in scale between individual level plots.'}
+knitr::include_graphics("./final results and code/generated_tables_plots/breakdown_probability_plots_episodics.png",
+                        dpi = 600)
+```
+
+```{r, echo=FALSE, fig.cap='Figure 5. Change in attack probability by including each weather factor for chronic individual 21. Lines represent mean (solid) and posterior 95% credible intervals (shaded region between dotted lines) for change in attack probability by weather factor. F shows overall risk. Note differences in y-axis scale.'}
+knitr::include_graphics("./final results and code/generated_tables_plots/change_breakdown_one_patient.png",
+                        dpi = 600)
+```
+
+### Appendix
+
+```{r, echo=FALSE}
+readRDS("./final results and code/generated_tables_plots/chron.p.Rds") %>%
+  as_tibble %>%
+  mutate_each_(funs(as.numeric), vars(Pressure, contains("Wind"))) %>%
+  select(Individual, Pressure, contains("Wind")) %>%
+  kable(digits = 3) %>%
+  kable_styling()
+```
+Table 6. Probability of positive effect due to weather factors for all chronic individuals.
+
+```{r, echo=FALSE}
+readRDS("./final results and code/generated_tables_plots/epis.p.Rds") %>%
+  as_tibble() %>%
+  mutate_each_(funs(as.numeric), vars(Humidity, Pressure, Temperature, contains("Wind"))) %>%
+  select(Individual, Humidity, Pressure, Temperature, contains("Wind")) %>%
+  kable(digits = 3) %>%
+  kable_styling()
+```
+Table 7. Probability of positive effect due to weather factors for all episodic individuals.
+
+```{r, echo=FALSE}
+readRDS("./final results and code/generated_tables_plots/chronics.table.baseline.Rds") %>%
+  kable(digits = 3) %>%
+  kable_styling()
+```
+Table 8. Baseline posterior summaries for individuals with chronic migraine.
+
+```{r, echo=FALSE}
+readRDS("./final results and code/generated_tables_plots/episodics.table.baseline.Rds") %>%
+  kable(digits = 3) %>%
+  kable_styling()
+```
+Table 9. Baseline posterior summaries for individuals with episodic migraine.
+
+```{r, echo=FALSE}
+readRDS("./final results and code/generated_tables_plots/chronics.table.pop.Rds") %>%
+  select(-weather) %>%
+  kable(digits = 3) %>%
+  kable_styling()
+```
+Table 10. Posterior summaries of regression coefficients associated with weather effects for individuals with chronic migraine.
+
+```{r, echo=FALSE, fig.cap=' '}
+readRDS("./final results and code/generated_tables_plots/episodics.table.pop.Rds") %>%
+  select(-weather) %>%
+  kable(digits = 3) %>%
+  kable_styling()
+```
+Table 11. Posterior summaries of regression coefficients associated with weather effects for individuals with episodic migraine.
